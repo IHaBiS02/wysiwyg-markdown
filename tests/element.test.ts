@@ -83,6 +83,16 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.getAttribute('source-edit-scope')).toBe('block');
   });
 
+  it('applies trusted host theme CSS inside the shadow root', async () => {
+    const editor = await createEditor('Paragraph');
+    editor.themeCss = '.ProseMirror pre { white-space: pre-wrap; }';
+    await editor.updateComplete;
+
+    expect(
+      editor.renderRoot.querySelector<HTMLStyleElement>('#host-theme')?.textContent,
+    ).toContain('white-space: pre-wrap');
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();
