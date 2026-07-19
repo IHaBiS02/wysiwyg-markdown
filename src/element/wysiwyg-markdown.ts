@@ -63,6 +63,11 @@ export class WysiwygMarkdownElement extends LitElement {
       attribute: 'show-code-block-header',
       reflect: true,
     },
+    showCodeLineNumbers: {
+      type: Boolean,
+      attribute: 'show-code-line-numbers',
+      reflect: true,
+    },
     codeHighlighter: { attribute: false },
     themeCss: { attribute: false },
     blockSourceOpen: { state: true },
@@ -79,6 +84,7 @@ export class WysiwygMarkdownElement extends LitElement {
   name = '';
   sourceEditScope: SourceEditScope = 'document';
   showCodeBlockHeader = true;
+  showCodeLineNumbers = false;
   codeHighlighter?: CodeHighlighter;
   themeCss = '';
   uploadImage?: ImageUploadHandler;
@@ -274,8 +280,8 @@ export class WysiwygMarkdownElement extends LitElement {
       this.#refreshTaskCheckboxes();
     }
 
-    if (changed.has('showCodeBlockHeader')) {
-      this.#refreshCodeBlockHeaders();
+    if (changed.has('showCodeBlockHeader') || changed.has('showCodeLineNumbers')) {
+      this.#refreshCodeBlockChrome();
     }
 
     if (changed.has('codeHighlighter')) {
@@ -690,8 +696,16 @@ export class WysiwygMarkdownElement extends LitElement {
     const code = document.createElement('code');
     code.className = 'hljs';
     pre.append(code);
+    const body = document.createElement('div');
+    body.className = 'code-block-content';
+    const lineNumbers = document.createElement('div');
+    lineNumbers.className = 'code-line-numbers';
+    lineNumbers.setAttribute('part', 'code-line-numbers');
+    lineNumbers.setAttribute('aria-hidden', 'true');
+    lineNumbers.contentEditable = 'false';
+    body.append(lineNumbers, pre);
     header.append(language, copyButton);
-    container.append(header, pre);
+    container.append(header, body);
 
     let node = initialNode;
     let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
@@ -702,6 +716,15 @@ export class WysiwygMarkdownElement extends LitElement {
       language.textContent = codeLanguage;
       code.dataset.language = codeLanguage;
       header.hidden = !this.showCodeBlockHeader;
+      lineNumbers.replaceChildren(
+        ...node.textContent.split('\n').map((_line, index) => {
+          const number = document.createElement('span');
+          number.textContent = String(index + 1);
+          return number;
+        }),
+      );
+      lineNumbers.hidden = !this.showCodeLineNumbers;
+      body.toggleAttribute('data-line-numbers', this.showCodeLineNumbers);
     };
 
     const showFeedback = (text: string): void => {
@@ -733,7 +756,9 @@ export class WysiwygMarkdownElement extends LitElement {
         updatePresentation();
         return true;
       },
-      stopEvent: (event) => header.contains(event.target as globalThis.Node),
+      stopEvent: (event) =>
+        header.contains(event.target as globalThis.Node) ||
+        lineNumbers.contains(event.target as globalThis.Node),
       destroy: () => {
         if (feedbackTimer) clearTimeout(feedbackTimer);
         copyButton.removeEventListener('click', handleCopy);
@@ -763,12 +788,17 @@ export class WysiwygMarkdownElement extends LitElement {
     }
   }
 
-  #refreshCodeBlockHeaders(): void {
-    this.renderRoot
-      .querySelectorAll<HTMLElement>('.code-block-header')
-      .forEach((header) => {
-        header.hidden = !this.showCodeBlockHeader;
-      });
+  #refreshCodeBlockChrome(): void {
+    this.renderRoot.querySelectorAll<HTMLElement>('.code-block-container').forEach(
+      (container) => {
+        const header = container.querySelector<HTMLElement>('.code-block-header');
+        const body = container.querySelector<HTMLElement>('.code-block-content');
+        const lineNumbers = container.querySelector<HTMLElement>('.code-line-numbers');
+        if (header) header.hidden = !this.showCodeBlockHeader;
+        if (lineNumbers) lineNumbers.hidden = !this.showCodeLineNumbers;
+        body?.toggleAttribute('data-line-numbers', this.showCodeLineNumbers);
+      },
+    );
   }
 
   #createCodeHighlightDecorations(documentNode: ProseMirrorNode): DecorationSet {

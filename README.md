@@ -73,6 +73,7 @@ editor.themeCss = `
 
 ```js
 editor.showCodeBlockHeader = false;
+editor.showCodeLineNumbers = true;
 ```
 
 편집 가능한 syntax highlighting은 호스트가 문자 범위와 CSS 클래스를 반환하는

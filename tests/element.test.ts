@@ -141,6 +141,18 @@ describe('wysiwyg-markdown element', () => {
     );
   });
 
+  it('shows a non-editable line number gutter when enabled', async () => {
+    const editor = await createEditor('```text\nfirst\nsecond\n```');
+    editor.showCodeLineNumbers = true;
+    await editor.updateComplete;
+
+    const gutter = editor.renderRoot.querySelector<HTMLElement>('.code-line-numbers');
+    expect(gutter?.hidden).toBe(false);
+    expect(gutter?.textContent).toBe('12');
+    expect(gutter?.contentEditable).toBe('false');
+    expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('first\nsecond');
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();

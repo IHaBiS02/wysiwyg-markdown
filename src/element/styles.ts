@@ -113,6 +113,27 @@ export const editorStyles = css`
     margin-top: 0;
   }
 
+  .code-block-content[data-line-numbers] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .code-block-content pre {
+    min-width: 0;
+  }
+
+  .code-line-numbers {
+    user-select: none;
+  }
+
+  .code-line-numbers[hidden] {
+    display: none;
+  }
+
+  .code-line-numbers span {
+    display: block;
+  }
+
   .code-block-header {
     display: flex;
     align-items: center;
