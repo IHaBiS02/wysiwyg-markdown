@@ -50,3 +50,21 @@ editor.addEventListener('input', (event) => {
   console.log(event.detail.markdown);
 });
 ```
+
+기본적으로 WYSIWYG 문서를 더블클릭하면 문서 전체를 수정하는 Markdown source
+모드로 전환됩니다. `Ctrl/Cmd + Enter`를 누르면 이전 WYSIWYG 또는 readonly 모드로
+돌아갑니다. 블록 단위 source 편집이 필요한 경우에만 다음 옵션을 사용합니다.
+
+```html
+<wysiwyg-markdown source-edit-scope="block"></wysiwyg-markdown>
+```
+
+호스트 앱의 디자인을 Shadow DOM 내부에 적용하려면 신뢰할 수 있는 CSS 문자열을
+`themeCss` 프로퍼티로 전달할 수 있습니다.
+
+```js
+editor.themeCss = `
+  .editor-mount .ProseMirror { padding: 12px; }
+  .editor-mount .ProseMirror pre { white-space: pre-wrap; }
+`;
+```

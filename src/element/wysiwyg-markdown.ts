@@ -17,6 +17,7 @@ import type { EditorExtension } from '../extensions/types';
 import { editorStyles } from './styles';
 
 export type EditorMode = 'wysiwyg' | 'source' | 'readonly';
+export type SourceEditScope = 'document' | 'block';
 
 interface BlockSourceRange {
   from: number;
@@ -42,6 +43,8 @@ export class WysiwygMarkdownElement extends LitElement {
     readonly: { type: Boolean, reflect: true },
     disabled: { type: Boolean, reflect: true },
     name: { type: String, reflect: true },
+    sourceEditScope: { type: String, attribute: 'source-edit-scope', reflect: true },
+    themeCss: { attribute: false },
     blockSourceOpen: { state: true },
     blockSourceValue: { state: true },
   };
@@ -54,6 +57,8 @@ export class WysiwygMarkdownElement extends LitElement {
   readonly = false;
   disabled = false;
   name = '';
+  sourceEditScope: SourceEditScope = 'document';
+  themeCss = '';
   uploadImage?: ImageUploadHandler;
   imageResolver?: ImageResolver;
   transformPastedText?: PastedTextTransformer;
@@ -77,6 +82,7 @@ export class WysiwygMarkdownElement extends LitElement {
   readonly #baseKeymapPlugin = keymap(baseKeymap);
   #internals?: ElementInternals;
   #defaultValue = '';
+  #sourceReturnMode: Exclude<EditorMode, 'source'> = 'wysiwyg';
 
   constructor() {
     super();
@@ -147,6 +153,7 @@ export class WysiwygMarkdownElement extends LitElement {
               </section>
             `
           : nothing}
+        <style id="host-theme"></style>
       </div>
     `;
   }
@@ -241,6 +248,11 @@ export class WysiwygMarkdownElement extends LitElement {
     if (changed.has('value') || changed.has('disabled')) {
       this.#syncFormValue();
     }
+
+    if (changed.has('themeCss')) {
+      const theme = this.renderRoot.querySelector<HTMLStyleElement>('#host-theme');
+      if (theme) theme.textContent = this.themeCss;
+    }
   }
 
   disconnectedCallback(): void {
@@ -265,6 +277,9 @@ export class WysiwygMarkdownElement extends LitElement {
   setMode(mode: EditorMode): void {
     if (!['wysiwyg', 'source', 'readonly'].includes(mode)) {
       throw new Error(`Unsupported editor mode: ${mode}`);
+    }
+    if (mode === 'source' && this.mode !== 'source') {
+      this.#sourceReturnMode = this.mode;
     }
     this.mode = mode;
   }
@@ -689,7 +704,16 @@ export class WysiwygMarkdownElement extends LitElement {
   }
 
   #handleEditorDoubleClick = (event: MouseEvent): void => {
-    if (!this.#view || !this.#isEditable()) return;
+    if (!this.#view || this.disabled || this.readonly) return;
+
+    if (this.sourceEditScope !== 'block') {
+      event.preventDefault();
+      this.setMode('source');
+      this.updateComplete.then(() => this.focus());
+      return;
+    }
+
+    if (!this.#isEditable()) return;
     const result = this.#view.posAtCoords({
       left: event.clientX,
       top: event.clientY,
@@ -723,7 +747,7 @@ export class WysiwygMarkdownElement extends LitElement {
   #handleDocumentSourceKeyDown = (event: KeyboardEvent): void => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
-      this.setMode('wysiwyg');
+      this.setMode(this.#sourceReturnMode);
     }
   };
 

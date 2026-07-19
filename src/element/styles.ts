@@ -2,17 +2,25 @@ import { css } from 'lit';
 
 export const editorStyles = css`
   :host {
-    --editor-background: #ffffff;
-    --editor-color: #1f2328;
-    --editor-border-color: #d0d7de;
-    --editor-muted-background: #f6f8fa;
-    --editor-accent: #0969da;
-    --editor-font-family:
-      ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --editor-code-font-family:
-      ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-    --editor-font-size: 16px;
+    --editor-background: transparent;
+    --editor-color: inherit;
+    --editor-border: 0;
+    --editor-border-radius: 0;
+    --editor-border-color: currentColor;
+    --editor-muted-background: transparent;
+    --editor-accent: currentColor;
+    --editor-font-family: inherit;
+    --editor-code-font-family: inherit;
+    --editor-font-size: inherit;
     --editor-min-height: 240px;
+    --editor-padding: 0;
+    --editor-line-height: inherit;
+    --editor-heading-line-height: inherit;
+    --editor-code-padding: 0;
+    --editor-code-border-radius: 0;
+    --editor-code-white-space: pre-wrap;
+    --editor-code-word-break: break-word;
+    --editor-code-overflow-x: hidden;
 
     display: block;
     min-width: 0;
@@ -29,8 +37,8 @@ export const editorStyles = css`
     position: relative;
     min-height: var(--editor-min-height);
     overflow: auto;
-    border: 1px solid var(--editor-border-color);
-    border-radius: 8px;
+    border: var(--editor-border);
+    border-radius: var(--editor-border-radius);
     background: var(--editor-background);
   }
 
@@ -46,7 +54,7 @@ export const editorStyles = css`
 
   .editor-mount .ProseMirror {
     min-height: var(--editor-min-height);
-    padding: 16px;
+    padding: var(--editor-padding);
     outline: none;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -61,7 +69,7 @@ export const editorStyles = css`
   }
 
   .editor-mount .ProseMirror p {
-    line-height: 1.65;
+    line-height: var(--editor-line-height);
   }
 
   .editor-mount .ProseMirror h1,
@@ -70,14 +78,12 @@ export const editorStyles = css`
   .editor-mount .ProseMirror h4,
   .editor-mount .ProseMirror h5,
   .editor-mount .ProseMirror h6 {
-    line-height: 1.25;
+    line-height: var(--editor-heading-line-height);
   }
 
   .editor-mount .ProseMirror blockquote {
     margin-left: 0;
-    padding-left: 1em;
-    border-left: 4px solid var(--editor-border-color);
-    color: color-mix(in srgb, var(--editor-color) 72%, transparent);
+    padding-left: 0;
   }
 
   .editor-mount .ProseMirror pre,
@@ -87,15 +93,16 @@ export const editorStyles = css`
   }
 
   .editor-mount .ProseMirror pre {
-    overflow-x: auto;
-    padding: 12px;
-    border-radius: 6px;
-    white-space: pre;
+    overflow-x: var(--editor-code-overflow-x);
+    padding: var(--editor-code-padding);
+    border-radius: var(--editor-code-border-radius);
+    white-space: var(--editor-code-white-space);
+    overflow-wrap: anywhere;
+    word-break: var(--editor-code-word-break);
   }
 
   .editor-mount .ProseMirror code {
-    padding: 0.12em 0.3em;
-    border-radius: 4px;
+    border-radius: var(--editor-code-border-radius);
   }
 
   .editor-mount .ProseMirror pre code {
@@ -149,8 +156,7 @@ export const editorStyles = css`
   .editor-mount .ProseMirror th,
   .editor-mount .ProseMirror td {
     min-width: 4em;
-    border: 1px solid var(--editor-border-color);
-    padding: 0.5em 0.65em;
+    padding: 0;
     text-align: left;
     vertical-align: top;
   }
@@ -165,14 +171,16 @@ export const editorStyles = css`
     width: 100%;
     resize: none;
     border: 0;
-    padding: 16px;
+    padding: var(--editor-padding);
     outline: none;
     background: var(--editor-background);
     color: var(--editor-color);
     font: inherit;
     font-family: var(--editor-code-font-family);
-    line-height: 1.55;
+    line-height: var(--editor-line-height);
     tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .block-source-panel {

@@ -6,6 +6,7 @@ export type {
   ImageResolver,
   ImageUploadHandler,
   PastedTextTransformer,
+  SourceEditScope,
   WysiwygMarkdownInputDetail,
 } from './element/wysiwyg-markdown';
 export { parseMarkdown, serializeMarkdown, markdownSchema } from './core/markdown';

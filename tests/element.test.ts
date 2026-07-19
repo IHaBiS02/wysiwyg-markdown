@@ -51,6 +51,38 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('Before');
   });
 
+  it('opens the full document source editor on double-click by default', async () => {
+    const editor = await createEditor('# Heading\n\nParagraph');
+    editor.setMode('readonly');
+    await editor.updateComplete;
+
+    editor.renderRoot.querySelector<HTMLElement>('#editor-mount')!.dispatchEvent(
+      new MouseEvent('dblclick', { bubbles: true }),
+    );
+    await editor.updateComplete;
+
+    const source = editor.renderRoot.querySelector<HTMLTextAreaElement>('#document-source');
+    expect(editor.mode).toBe('source');
+    expect(source?.hidden).toBe(false);
+    expect(source?.value).toBe('# Heading\n\nParagraph');
+
+    source!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+    );
+    await editor.updateComplete;
+    expect(editor.mode).toBe('readonly');
+  });
+
+  it('keeps block source editing as an explicit opt-in', async () => {
+    const editor = await createEditor('Paragraph');
+
+    expect(editor.sourceEditScope).toBe('document');
+    editor.sourceEditScope = 'block';
+    await editor.updateComplete;
+
+    expect(editor.getAttribute('source-edit-scope')).toBe('block');
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();
