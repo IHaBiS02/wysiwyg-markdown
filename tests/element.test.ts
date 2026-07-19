@@ -1,0 +1,88 @@
+import { describe, expect, it, vi } from 'vitest';
+import '../src/index';
+import type { WysiwygMarkdownElement } from '../src/element/wysiwyg-markdown';
+
+async function createEditor(markdown = ''): Promise<WysiwygMarkdownElement> {
+  const editor = document.createElement('wysiwyg-markdown');
+  editor.value = markdown;
+  document.body.append(editor);
+  await editor.updateComplete;
+  return editor;
+}
+
+describe('wysiwyg-markdown element', () => {
+  it('renders Markdown and exposes its canonical value', async () => {
+    const editor = await createEditor('# Hello');
+
+    expect(editor.getMarkdown()).toBe('# Hello');
+    expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('Hello');
+  });
+
+  it('updates the document through setMarkdown', async () => {
+    const editor = await createEditor('Initial');
+
+    editor.setMarkdown('## Updated');
+    await editor.updateComplete;
+
+    expect(editor.getMarkdown()).toBe('## Updated');
+    expect(editor.renderRoot.querySelector('h2')?.textContent).toBe('Updated');
+  });
+
+  it('keeps raw source text until source mode is committed', async () => {
+    const editor = await createEditor('# Before');
+    editor.setMode('source');
+    await editor.updateComplete;
+
+    const source = editor.renderRoot.querySelector<HTMLTextAreaElement>('#document-source');
+    expect(source).not.toBeNull();
+    source!.value = '# After';
+    source!.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    await editor.updateComplete;
+
+    expect(editor.value).toBe('# After');
+    expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('Before');
+
+    editor.setMode('wysiwyg');
+    await editor.updateComplete;
+    expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('After');
+  });
+
+  it('dispatches input events for commands', async () => {
+    const editor = await createEditor('paragraph');
+    const listener = vi.fn();
+    editor.addEventListener('input', listener);
+
+    expect(editor.execute('heading1')).toBe(true);
+    await editor.updateComplete;
+
+    expect(listener).toHaveBeenCalled();
+    expect(editor.value).toBe('# paragraph');
+  });
+
+  it('registers and removes behavior extensions', async () => {
+    const editor = await createEditor('text');
+    editor.use({
+      name: 'append-mark',
+      commands: {
+        appendMark: ({ state, dispatch }) => {
+          if (dispatch) dispatch(state.tr.insertText('!'));
+          return true;
+        },
+      },
+    });
+
+    expect(editor.execute('appendMark')).toBe(true);
+    expect(editor.removeExtension('append-mark')).toBe(true);
+    expect(editor.execute('appendMark')).toBe(false);
+  });
+
+  it('can be disconnected and connected again', async () => {
+    const editor = await createEditor('# Reconnect');
+    editor.remove();
+    document.body.append(editor);
+    await editor.updateComplete;
+
+    expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('Reconnect');
+    expect(editor.execute('heading2')).toBe(true);
+  });
+});
