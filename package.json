@@ -25,6 +25,7 @@
     "demo:dist": "npm run build && vite --host 127.0.0.1",
     "build": "npm run licenses && vite build && tsc -p tsconfig.build.json",
     "licenses": "node scripts/generate-third-party-licenses.mjs",
+    "sync:sidenote": "npm run build && node scripts/sync-sidenote.mjs",
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"

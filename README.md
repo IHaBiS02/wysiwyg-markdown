@@ -30,6 +30,12 @@ npm.cmd run build
 npm.cmd run demo:dist
 ```
 
+SideNote 저장소에 최신 번들과 라이선스 고지를 복사하려면 다음 명령을 사용합니다.
+
+```powershell
+npm.cmd run sync:sidenote
+```
+
 ## 기본 사용법
 
 ```html
