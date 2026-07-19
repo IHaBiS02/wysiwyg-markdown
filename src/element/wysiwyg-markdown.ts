@@ -44,6 +44,11 @@ export class WysiwygMarkdownElement extends LitElement {
     disabled: { type: Boolean, reflect: true },
     name: { type: String, reflect: true },
     sourceEditScope: { type: String, attribute: 'source-edit-scope', reflect: true },
+    showCodeBlockHeader: {
+      type: Boolean,
+      attribute: 'show-code-block-header',
+      reflect: true,
+    },
     themeCss: { attribute: false },
     blockSourceOpen: { state: true },
     blockSourceValue: { state: true },
@@ -58,6 +63,7 @@ export class WysiwygMarkdownElement extends LitElement {
   disabled = false;
   name = '';
   sourceEditScope: SourceEditScope = 'document';
+  showCodeBlockHeader = true;
   themeCss = '';
   uploadImage?: ImageUploadHandler;
   imageResolver?: ImageResolver;
@@ -201,6 +207,7 @@ export class WysiwygMarkdownElement extends LitElement {
         },
       },
       nodeViews: {
+        code_block: (node) => this.#createCodeBlockNodeView(node),
         image: (node) => this.#createImageNodeView(node),
         list_item: (node, view, getPos) =>
           this.#createListItemNodeView(node, view, getPos),
@@ -244,6 +251,10 @@ export class WysiwygMarkdownElement extends LitElement {
       changed.has('disabled')
     ) {
       this.#refreshTaskCheckboxes();
+    }
+
+    if (changed.has('showCodeBlockHeader')) {
+      this.#refreshCodeBlockHeaders();
     }
 
     if (changed.has('value') || changed.has('disabled')) {
@@ -624,6 +635,111 @@ export class WysiwygMarkdownElement extends LitElement {
         this.#revokeResolvedImage(resolvedSource);
       },
     };
+  }
+
+  #createCodeBlockNodeView(initialNode: ProseMirrorNode): NodeView {
+    const container = document.createElement('div');
+    container.className = 'code-block-container';
+
+    const header = document.createElement('div');
+    header.className = 'code-block-header';
+    header.setAttribute('part', 'code-block-header');
+    header.contentEditable = 'false';
+
+    const language = document.createElement('span');
+    language.className = 'code-block-language';
+    language.setAttribute('part', 'code-block-language');
+
+    const copyButton = document.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'copy-code-button';
+    copyButton.setAttribute('part', 'copy-code-button');
+    copyButton.setAttribute('aria-label', 'Copy code');
+    copyButton.title = 'Copy code';
+    copyButton.textContent = '📄';
+
+    const pre = document.createElement('pre');
+    pre.className = 'code-block-body';
+    pre.setAttribute('part', 'code-block-body');
+    const code = document.createElement('code');
+    pre.append(code);
+    header.append(language, copyButton);
+    container.append(header, pre);
+
+    let node = initialNode;
+    let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const updatePresentation = (): void => {
+      const info = String(node.attrs.params ?? '').trim();
+      language.textContent = info.split(/\s+/)[0] || 'text';
+      header.hidden = !this.showCodeBlockHeader;
+    };
+
+    const showFeedback = (text: string): void => {
+      if (feedbackTimer) clearTimeout(feedbackTimer);
+      copyButton.textContent = text;
+      feedbackTimer = setTimeout(() => {
+        copyButton.textContent = '📄';
+        feedbackTimer = undefined;
+      }, 1000);
+    };
+
+    const handleCopy = async (): Promise<void> => {
+      try {
+        await this.#copyTextToClipboard(node.textContent);
+        showFeedback('✓');
+      } catch {
+        showFeedback('!');
+      }
+    };
+    copyButton.addEventListener('click', handleCopy);
+    updatePresentation();
+
+    return {
+      dom: container,
+      contentDOM: code,
+      update: (updatedNode) => {
+        if (updatedNode.type !== node.type) return false;
+        node = updatedNode;
+        updatePresentation();
+        return true;
+      },
+      stopEvent: (event) => header.contains(event.target as globalThis.Node),
+      destroy: () => {
+        if (feedbackTimer) clearTimeout(feedbackTimer);
+        copyButton.removeEventListener('click', handleCopy);
+      },
+    };
+  }
+
+  async #copyTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.readOnly = true;
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    document.body.append(textarea);
+    textarea.select();
+    try {
+      if (!document.execCommand('copy')) {
+        throw new Error('The browser rejected the copy command.');
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  #refreshCodeBlockHeaders(): void {
+    this.renderRoot
+      .querySelectorAll<HTMLElement>('.code-block-header')
+      .forEach((header) => {
+        header.hidden = !this.showCodeBlockHeader;
+      });
   }
 
   #revokeResolvedImage(source: string | null): void {

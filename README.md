@@ -68,3 +68,9 @@ editor.themeCss = `
   .editor-mount .ProseMirror pre { white-space: pre-wrap; }
 `;
 ```
+
+펜스 코드 블록은 언어 표시와 복사 버튼을 기본 제공하며 필요하면 숨길 수 있습니다.
+
+```js
+editor.showCodeBlockHeader = false;
+```

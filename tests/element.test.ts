@@ -93,6 +93,36 @@ describe('wysiwyg-markdown element', () => {
     ).toContain('white-space: pre-wrap');
   });
 
+  it('renders fenced code language and copies the raw code', async () => {
+    const editor = await createEditor('```text\nfirst line\nsecond line\n```');
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const header = editor.renderRoot.querySelector<HTMLElement>('.code-block-header');
+    const language = editor.renderRoot.querySelector('.code-block-language');
+    const copyButton = editor.renderRoot.querySelector<HTMLButtonElement>('.copy-code-button');
+
+    expect(header?.hidden).toBe(false);
+    expect(language?.textContent).toBe('text');
+    copyButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(writeText).toHaveBeenCalledWith('first line\nsecond line');
+    expect(copyButton?.textContent).toBe('✓');
+  });
+
+  it('can hide code block headers without changing the code block', async () => {
+    const editor = await createEditor('```js\nconst value = 1;\n```');
+    editor.showCodeBlockHeader = false;
+    await editor.updateComplete;
+
+    expect(editor.renderRoot.querySelector<HTMLElement>('.code-block-header')?.hidden).toBe(true);
+    expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('const value = 1;');
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();

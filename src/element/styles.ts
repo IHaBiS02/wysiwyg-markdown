@@ -109,6 +109,26 @@ export const editorStyles = css`
     padding: 0;
   }
 
+  .editor-mount .ProseMirror .code-block-container pre {
+    margin-top: 0;
+  }
+
+  .code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .code-block-header[hidden] {
+    display: none;
+  }
+
+  .code-block-language {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .editor-mount .ProseMirror img {
     max-width: 100%;
     height: auto;
