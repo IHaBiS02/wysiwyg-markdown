@@ -3,6 +3,9 @@ import { WysiwygMarkdownElement } from './element/wysiwyg-markdown';
 export { WysiwygMarkdownElement } from './element/wysiwyg-markdown';
 export type {
   EditorMode,
+  ImageResolver,
+  ImageUploadHandler,
+  PastedTextTransformer,
   WysiwygMarkdownInputDetail,
 } from './element/wysiwyg-markdown';
 export { parseMarkdown, serializeMarkdown, markdownSchema } from './core/markdown';

@@ -1,4 +1,9 @@
-import '../src/index';
+if (window.location.pathname.endsWith('/dist.html')) {
+  const bundlePath = '../dist/wysiwyg-markdown.js';
+  await import(/* @vite-ignore */ bundlePath);
+} else {
+  await import('../src/index');
+}
 import type {
   EditorExtension,
   EditorMode,
@@ -16,6 +21,26 @@ function queryRequired<T extends Element>(selector: string): T {
 const editor = queryRequired<WysiwygMarkdownElement>('#editor');
 const markdownOutput = queryRequired<HTMLTextAreaElement>('#markdown-output');
 const eventLog = queryRequired<HTMLOListElement>('#event-log');
+const imageInput = queryRequired<HTMLInputElement>('#image-input');
+
+const memoryImages = new Map<string, File>();
+
+function memoryImageId(source: string): string {
+  return source.replace(/^memory-images\//, '');
+}
+
+editor.uploadImage = async (file) => {
+  const id = crypto.randomUUID();
+  memoryImages.set(id, file);
+  logEvent('image:upload', { id, name: file.name, size: file.size });
+  return `memory-images/${id}`;
+};
+
+editor.imageResolver = async (source) => {
+  if (!source.startsWith('memory-images/')) return source;
+  const file = memoryImages.get(memoryImageId(source));
+  return file ? URL.createObjectURL(file) : null;
+};
 
 editor.value = sampleMarkdown;
 markdownOutput.value = sampleMarkdown;
@@ -55,6 +80,14 @@ document.querySelector('#undo')?.addEventListener('click', () => editor.undo());
 document.querySelector('#redo')?.addEventListener('click', () => editor.redo());
 document.querySelector('#heading')?.addEventListener('click', () => editor.execute('heading1'));
 document.querySelector('#bold')?.addEventListener('click', () => editor.execute('toggleBold'));
+document.querySelector('#image-button')?.addEventListener('click', () => imageInput.click());
+imageInput.addEventListener('change', async () => {
+  const file = imageInput.files?.[0];
+  if (!file || !editor.uploadImage) return;
+  const source = await editor.uploadImage(file);
+  if (source) editor.insertImage(source, file.name);
+  imageInput.value = '';
+});
 
 document.querySelector('#reset')?.addEventListener('click', () => {
   editor.setMarkdown(sampleMarkdown);

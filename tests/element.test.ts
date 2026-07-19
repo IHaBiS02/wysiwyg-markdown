@@ -45,6 +45,10 @@ describe('wysiwyg-markdown element', () => {
     editor.setMode('wysiwyg');
     await editor.updateComplete;
     expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('After');
+
+    expect(editor.undo()).toBe(true);
+    await editor.updateComplete;
+    expect(editor.renderRoot.querySelector('h1')?.textContent).toBe('Before');
   });
 
   it('dispatches input events for commands', async () => {
@@ -74,6 +78,30 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.execute('appendMark')).toBe(true);
     expect(editor.removeExtension('append-mark')).toBe(true);
     expect(editor.execute('appendMark')).toBe(false);
+  });
+
+  it('inserts images and resolves host-managed image sources', async () => {
+    const editor = await createEditor('');
+    const resolver = vi.fn(async () => 'data:image/png;base64,AA==');
+    editor.imageResolver = resolver;
+
+    expect(editor.insertImage('images/example.png', 'Example')).toBe(true);
+    await editor.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const image = editor.renderRoot.querySelector<HTMLImageElement>('img');
+    expect(editor.value).toContain('![Example](images/example.png)');
+    expect(resolver).toHaveBeenCalledWith('images/example.png');
+    expect(image?.src).toBe('data:image/png;base64,AA==');
+  });
+
+  it('does not mutate content while disabled', async () => {
+    const editor = await createEditor('unchanged');
+    editor.disabled = true;
+    await editor.updateComplete;
+
+    expect(editor.insertText('changed')).toBe(false);
+    expect(editor.value).toBe('unchanged');
   });
 
   it('can be disconnected and connected again', async () => {

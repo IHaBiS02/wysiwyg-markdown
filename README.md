@@ -20,6 +20,16 @@ npm.cmd run test:run
 npm.cmd run build
 ```
 
+프로덕션 빌드는 번들에 포함되는 런타임 패키지의 라이선스를
+`THIRD_PARTY_LICENSES.md`에 함께 생성합니다.
+
+빌드된 단일 ESM 번들을 데모에서 확인하려면 다음 명령을 실행한 뒤
+출력된 주소의 `/demo/dist.html`을 엽니다.
+
+```powershell
+npm.cmd run demo:dist
+```
+
 ## 기본 사용법
 
 ```html

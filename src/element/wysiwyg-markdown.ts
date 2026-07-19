@@ -4,7 +4,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorState, type Plugin, type Transaction } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
+import { EditorView, type NodeView } from 'prosemirror-view';
 import { standardCommands, type EditorCommand } from '../core/commands';
 import {
   markdownSchema,
@@ -28,7 +28,13 @@ export interface WysiwygMarkdownInputDetail {
   source: 'keyboard' | 'paste' | 'command' | 'source-edit' | 'api';
 }
 
+export type ImageUploadHandler = (file: File) => Promise<string | null>;
+export type ImageResolver = (source: string) => Promise<string | null> | string | null;
+export type PastedTextTransformer = (text: string) => string;
+
 export class WysiwygMarkdownElement extends LitElement {
+  static formAssociated = true;
+
   static properties = {
     value: { type: String },
     mode: { type: String, reflect: true },
@@ -48,6 +54,9 @@ export class WysiwygMarkdownElement extends LitElement {
   readonly = false;
   disabled = false;
   name = '';
+  uploadImage?: ImageUploadHandler;
+  imageResolver?: ImageResolver;
+  transformPastedText?: PastedTextTransformer;
 
   protected blockSourceOpen = false;
   protected blockSourceValue = '';
@@ -58,9 +67,30 @@ export class WysiwygMarkdownElement extends LitElement {
   #blockSourceRange?: BlockSourceRange;
   #lastDocumentMarkdown = '';
   #plugins: Plugin[] = [];
+  readonly #historyPlugin = history();
+  readonly #standardInputRulesPlugin = createStandardInputRules();
+  readonly #historyKeymapPlugin = keymap({
+    'Mod-z': undo,
+    'Shift-Mod-z': redo,
+    'Mod-y': redo,
+  });
+  readonly #baseKeymapPlugin = keymap(baseKeymap);
+  #internals?: ElementInternals;
+  #defaultValue = '';
+
+  constructor() {
+    super();
+    if (typeof this.attachInternals === 'function') {
+      this.#internals = this.attachInternals();
+    }
+  }
 
   connectedCallback(): void {
     super.connectedCallback();
+    if (!this.hasAttribute('role')) this.setAttribute('role', 'textbox');
+    if (!this.hasAttribute('aria-multiline')) {
+      this.setAttribute('aria-multiline', 'true');
+    }
     if (this.hasUpdated && !this.#view) {
       this.updateComplete.then(() => this.#mountEditor());
     }
@@ -125,6 +155,12 @@ export class WysiwygMarkdownElement extends LitElement {
     this.#mountEditor();
   }
 
+  protected willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has('mode') && this.mode === 'source') {
+      this.documentSourceValue = this.value;
+    }
+  }
+
   #mountEditor(): void {
     if (this.#view) return;
     const mount = this.renderRoot.querySelector<HTMLElement>('#editor-mount');
@@ -132,6 +168,7 @@ export class WysiwygMarkdownElement extends LitElement {
 
     const document = this.#parseOrReport(this.value);
     this.#lastDocumentMarkdown = serializeMarkdown(document);
+    this.#defaultValue = this.value;
     this.documentSourceValue = this.value;
     this.#plugins = this.#createPlugins();
     const state = EditorState.create({
@@ -144,7 +181,19 @@ export class WysiwygMarkdownElement extends LitElement {
       state,
       editable: () => this.#isEditable(),
       dispatchTransaction: (transaction) => this.#dispatchTransaction(transaction),
+      transformPastedText: (text) => this.transformPastedText?.(text) ?? text,
+      handlePaste: (view, event) => this.#handleImagePaste(view, event),
+      handleDOMEvents: {
+        blur: () => {
+          this.#emitChange('keyboard');
+          return false;
+        },
+      },
+      nodeViews: {
+        image: (node) => this.#createImageNodeView(node),
+      },
     });
+    this.#syncFormValue();
   }
 
   protected updated(changed: PropertyValues<this>): void {
@@ -159,9 +208,7 @@ export class WysiwygMarkdownElement extends LitElement {
     }
 
     if (changed.has('mode')) {
-      if (this.mode === 'source') {
-        this.documentSourceValue = this.value;
-      } else if (changed.get('mode') === 'source') {
+      if (changed.get('mode') === 'source' && this.mode !== 'source') {
         this.#replaceDocument(this.documentSourceValue, true, 'source-edit');
       }
       this.#view.setProps({ editable: () => this.#isEditable() });
@@ -177,6 +224,10 @@ export class WysiwygMarkdownElement extends LitElement {
     if (changed.has('readonly') || changed.has('disabled')) {
       this.#view.setProps({ editable: () => this.#isEditable() });
     }
+
+    if (changed.has('value') || changed.has('disabled')) {
+      this.#syncFormValue();
+    }
   }
 
   disconnectedCallback(): void {
@@ -191,6 +242,11 @@ export class WysiwygMarkdownElement extends LitElement {
 
   setMarkdown(markdown: string): void {
     this.value = markdown ?? '';
+    if (this.mode === 'source') this.documentSourceValue = this.value;
+  }
+
+  formResetCallback(): void {
+    this.setMarkdown(this.#defaultValue);
   }
 
   setMode(mode: EditorMode): void {
@@ -212,12 +268,22 @@ export class WysiwygMarkdownElement extends LitElement {
 
   undo(): boolean {
     if (!this.#view) return false;
-    return undo(this.#view.state, this.#view.dispatch, this.#view);
+    return undo(
+      this.#view.state,
+      (transaction) =>
+        this.#view?.dispatch(transaction.setMeta('wysiwygMarkdownSource', 'command')),
+      this.#view,
+    );
   }
 
   redo(): boolean {
     if (!this.#view) return false;
-    return redo(this.#view.state, this.#view.dispatch, this.#view);
+    return redo(
+      this.#view.state,
+      (transaction) =>
+        this.#view?.dispatch(transaction.setMeta('wysiwygMarkdownSource', 'command')),
+      this.#view,
+    );
   }
 
   execute(commandName: string): boolean {
@@ -226,7 +292,8 @@ export class WysiwygMarkdownElement extends LitElement {
     if (!command) return false;
     return command({
       state: this.#view.state,
-      dispatch: this.#view.dispatch,
+      dispatch: (transaction) =>
+        this.#view?.dispatch(transaction.setMeta('wysiwygMarkdownSource', 'command')),
       view: this.#view,
     });
   }
@@ -249,7 +316,11 @@ export class WysiwygMarkdownElement extends LitElement {
   insertText(text: string): boolean {
     if (!this.#view || !this.#isEditable()) return false;
     const { from, to } = this.#view.state.selection;
-    this.#view.dispatch(this.#view.state.tr.insertText(text, from, to));
+    this.#view.dispatch(
+      this.#view.state.tr
+        .insertText(text, from, to)
+        .setMeta('wysiwygMarkdownSource', 'api'),
+    );
     return true;
   }
 
@@ -258,7 +329,10 @@ export class WysiwygMarkdownElement extends LitElement {
     const parsed = this.#parseOrReport(markdown);
     const { from, to } = this.#view.state.selection;
     this.#view.dispatch(
-      this.#view.state.tr.replaceWith(from, to, parsed.content).scrollIntoView(),
+      this.#view.state.tr
+        .replaceWith(from, to, parsed.content)
+        .scrollIntoView()
+        .setMeta('wysiwygMarkdownSource', 'api'),
     );
     return true;
   }
@@ -267,10 +341,23 @@ export class WysiwygMarkdownElement extends LitElement {
     return this.insertMarkdown(markdown);
   }
 
+  insertImage(source: string, alt = 'Image', title: string | null = null): boolean {
+    if (!this.#view || !this.#isEditable()) return false;
+    const image = markdownSchema.nodes.image.create({ src: source, alt, title });
+    this.#view.dispatch(
+      this.#view.state.tr
+        .replaceSelectionWith(image)
+        .scrollIntoView()
+        .setMeta('wysiwygMarkdownSource', 'api'),
+    );
+    return true;
+  }
+
   cancelBlockSourceEdit = (): void => {
     this.blockSourceOpen = false;
     this.blockSourceValue = '';
     this.#blockSourceRange = undefined;
+    this.#view?.setProps({ editable: () => this.#isEditable() });
     this.#view?.focus();
   };
 
@@ -279,30 +366,35 @@ export class WysiwygMarkdownElement extends LitElement {
     const parsed = this.#parseOrReport(this.blockSourceValue);
     const { from, to } = this.#blockSourceRange;
     this.#view.dispatch(
-      this.#view.state.tr.replaceWith(from, to, parsed.content).scrollIntoView(),
+      this.#view.state.tr
+        .replaceWith(from, to, parsed.content)
+        .scrollIntoView()
+        .setMeta('wysiwygMarkdownSource', 'source-edit'),
     );
     this.blockSourceOpen = false;
     this.blockSourceValue = '';
     this.#blockSourceRange = undefined;
+    this.#view.setProps({ editable: () => this.#isEditable() });
     this.#emitChange('source-edit');
     this.#view.focus();
   };
 
   #isEditable(): boolean {
-    return this.mode === 'wysiwyg' && !this.readonly && !this.disabled;
+    return (
+      this.mode === 'wysiwyg' &&
+      !this.readonly &&
+      !this.disabled &&
+      !this.blockSourceOpen
+    );
   }
 
   #createPlugins(): Plugin[] {
     return [
-      history(),
-      createStandardInputRules(),
+      this.#historyPlugin,
+      this.#standardInputRulesPlugin,
       ...this.#registry.plugins(),
-      keymap({
-        'Mod-z': undo,
-        'Shift-Mod-z': redo,
-        'Mod-y': redo,
-      }),
-      keymap(baseKeymap),
+      this.#historyKeymapPlugin,
+      this.#baseKeymapPlugin,
     ];
   }
 
@@ -328,7 +420,12 @@ export class WysiwygMarkdownElement extends LitElement {
       this.#lastDocumentMarkdown = markdown;
       this.value = markdown;
       this.documentSourceValue = markdown;
-      this.#emitInput(transaction.getMeta('paste') ? 'paste' : 'keyboard');
+      if (!transaction.getMeta('wysiwygMarkdownSilent')) {
+        const source =
+          transaction.getMeta('wysiwygMarkdownSource') ??
+          (transaction.getMeta('paste') ? 'paste' : 'keyboard');
+        this.#emitInput(source);
+      }
     }
 
     if (transaction.selectionSet) {
@@ -357,26 +454,17 @@ export class WysiwygMarkdownElement extends LitElement {
       this.#view.state.doc.content.size,
       parsed.content,
     );
-    const nextState = this.#view.state.apply(transaction);
-    this.#view.updateState(nextState);
-    const canonical = serializeMarkdown(nextState.doc);
-    this.#lastDocumentMarkdown = canonical;
-    this.value = canonical;
-    this.documentSourceValue = canonical;
-    if (emit) this.#emitInput(source);
+    transaction.setMeta('wysiwygMarkdownSource', source);
+    transaction.setMeta('wysiwygMarkdownSilent', !emit);
+    if (source === 'api') transaction.setMeta('addToHistory', false);
+    this.#view.dispatch(transaction);
   }
 
   #parseOrReport(markdown: string): ProseMirrorNode {
     try {
       return parseMarkdown(markdown);
     } catch (error) {
-      this.dispatchEvent(
-        new CustomEvent('editor-error', {
-          detail: { error, markdown },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.#reportError(error, markdown);
       return parseMarkdown('');
     }
   }
@@ -401,6 +489,118 @@ export class WysiwygMarkdownElement extends LitElement {
     );
   }
 
+  #syncFormValue(): void {
+    if (this.#internals && typeof this.#internals.setFormValue === 'function') {
+      this.#internals.setFormValue(this.disabled ? null : this.value);
+    }
+  }
+
+  #reportError(error: unknown, markdown: string): void {
+    this.dispatchEvent(
+      new CustomEvent('editor-error', {
+        detail: { error, markdown },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  #handleImagePaste(view: EditorView, event: ClipboardEvent): boolean {
+    const file = [...(event.clipboardData?.files ?? [])].find((candidate) =>
+      candidate.type.startsWith('image/'),
+    );
+    if (!file || !this.uploadImage) return false;
+
+    event.preventDefault();
+    const selection = {
+      from: view.state.selection.from,
+      to: view.state.selection.to,
+    };
+    void this.#uploadAndInsertImage(file, selection);
+    return true;
+  }
+
+  async #uploadAndInsertImage(file: File, selection: BlockSourceRange): Promise<void> {
+    if (!this.#view || !this.uploadImage) return;
+    try {
+      const source = await this.uploadImage(file);
+      if (!source || !this.#view) return;
+      const image = markdownSchema.nodes.image.create({
+        src: source,
+        alt: file.name || 'Image',
+        title: null,
+      });
+      const maximum = this.#view.state.doc.content.size;
+      const from = Math.min(selection.from, maximum);
+      const to = Math.min(selection.to, maximum);
+      this.#view.dispatch(
+        this.#view.state.tr
+          .replaceWith(from, to, image)
+          .scrollIntoView()
+          .setMeta('wysiwygMarkdownSource', 'paste'),
+      );
+    } catch (error) {
+      this.#reportError(error, `[image paste: ${file.name}]`);
+    }
+  }
+
+  #createImageNodeView(initialNode: ProseMirrorNode): NodeView {
+    const image = document.createElement('img');
+    let node = initialNode;
+    let resolvedSource: string | null = null;
+    let destroyed = false;
+
+    const updateSource = async (source: string): Promise<void> => {
+      image.dataset.source = source;
+      image.alt = node.attrs.alt ?? '';
+      image.title = node.attrs.title ?? '';
+      try {
+        resolvedSource = this.imageResolver
+          ? await this.imageResolver(source)
+          : source;
+        if (destroyed) {
+          this.#revokeResolvedImage(resolvedSource);
+          return;
+        }
+        if (resolvedSource) {
+          image.src = resolvedSource;
+          image.removeAttribute('data-missing');
+        } else {
+          image.removeAttribute('src');
+          image.dataset.missing = 'true';
+          image.alt = node.attrs.alt || `Image not found: ${source}`;
+        }
+      } catch (error) {
+        image.removeAttribute('src');
+        image.dataset.missing = 'true';
+        this.#reportError(error, source);
+      }
+    };
+
+    void updateSource(node.attrs.src);
+    return {
+      dom: image,
+      update: (updatedNode) => {
+        if (updatedNode.type !== node.type) return false;
+        this.#revokeResolvedImage(resolvedSource);
+        resolvedSource = null;
+        node = updatedNode;
+        void updateSource(updatedNode.attrs.src);
+        return true;
+      },
+      destroy: () => {
+        destroyed = true;
+        this.#revokeResolvedImage(resolvedSource);
+      },
+    };
+  }
+
+  #revokeResolvedImage(source: string | null): void {
+    if (source?.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(source);
+    }
+  }
+
   #handleEditorDoubleClick = (event: MouseEvent): void => {
     if (!this.#view || !this.#isEditable()) return;
     const result = this.#view.posAtCoords({
@@ -419,6 +619,7 @@ export class WysiwygMarkdownElement extends LitElement {
     this.#blockSourceRange = { from, to };
     this.blockSourceValue = serializeMarkdown(temporaryDocument);
     this.blockSourceOpen = true;
+    this.#view.setProps({ editable: () => this.#isEditable() });
     this.updateComplete.then(() => {
       const textarea = this.renderRoot.querySelector<HTMLTextAreaElement>('#block-source');
       textarea?.focus();
@@ -435,7 +636,6 @@ export class WysiwygMarkdownElement extends LitElement {
   #handleDocumentSourceKeyDown = (event: KeyboardEvent): void => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
-      this.#replaceDocument(this.documentSourceValue, true, 'source-edit');
       this.setMode('wysiwyg');
     }
   };
