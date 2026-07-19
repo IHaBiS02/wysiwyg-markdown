@@ -38,5 +38,6 @@ export const standardCommands: Record<string, EditorCommand> = {
   toggleBold: fromProseMirrorCommand(toggleMark(markdownSchema.marks.strong)),
   toggleItalic: fromProseMirrorCommand(toggleMark(markdownSchema.marks.em)),
   toggleCode: fromProseMirrorCommand(toggleMark(markdownSchema.marks.code)),
+  toggleStrike: fromProseMirrorCommand(toggleMark(markdownSchema.marks.strike)),
   blockquote: fromProseMirrorCommand(wrapIn(markdownSchema.nodes.blockquote)),
 };

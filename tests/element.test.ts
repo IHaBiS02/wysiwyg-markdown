@@ -104,6 +104,22 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.value).toBe('unchanged');
   });
 
+  it('renders task list checkboxes from Markdown', async () => {
+    const editor = await createEditor('- [ ] open\n- [x] done');
+    const checkboxes = editor.renderRoot.querySelectorAll<HTMLInputElement>(
+      'li[data-task] > input[type="checkbox"]',
+    );
+
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0].checked).toBe(false);
+    expect(checkboxes[1].checked).toBe(true);
+
+    checkboxes[0].checked = true;
+    checkboxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+    await editor.updateComplete;
+    expect(editor.value).toContain('* [x] open');
+  });
+
   it('can be disconnected and connected again', async () => {
     const editor = await createEditor('# Reconnect');
     editor.remove();

@@ -23,6 +23,20 @@ export function createStandardInputRules(): Plugin {
       (match) => ({ order: Number(match[1]) }),
       (match, node) => node.childCount + node.attrs.order === Number(match[1]),
     ),
+    new InputRule(/^\[([ xX])\]\s$/, (state, match, start, end) => {
+      const resolved = state.doc.resolve(start);
+      for (let depth = resolved.depth; depth > 0; depth -= 1) {
+        const node = resolved.node(depth);
+        if (node.type !== markdownSchema.nodes.list_item) continue;
+        return state.tr
+          .delete(start, end)
+          .setNodeMarkup(resolved.before(depth), undefined, {
+            ...node.attrs,
+            checked: match[1].toLowerCase() === 'x',
+          });
+      }
+      return null;
+    }),
     new InputRule(/^---$/, (state, _match, start, end) => {
       const horizontalRule = markdownSchema.nodes.horizontal_rule;
       if (!horizontalRule) return null;

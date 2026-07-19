@@ -26,6 +26,7 @@ export const editorStyles = css`
   }
 
   .surface {
+    position: relative;
     min-height: var(--editor-min-height);
     overflow: auto;
     border: 1px solid var(--editor-border-color);
@@ -104,6 +105,59 @@ export const editorStyles = css`
   .editor-mount .ProseMirror img {
     max-width: 100%;
     height: auto;
+  }
+
+  .editor-mount .ProseMirror li[data-task] {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55em;
+    list-style: none;
+  }
+
+  .editor-mount .ProseMirror li[data-task] > input {
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    margin: 0.38em 0 0;
+    accent-color: var(--editor-accent);
+  }
+
+  .editor-mount .ProseMirror .task-content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .editor-mount .ProseMirror .task-content > *:first-child {
+    margin-top: 0;
+  }
+
+  .editor-mount .ProseMirror .task-content > *:last-child {
+    margin-bottom: 0;
+  }
+
+  .editor-mount .ProseMirror li[data-checked="true"] .task-content {
+    opacity: 0.7;
+    text-decoration: line-through;
+  }
+
+  .editor-mount .ProseMirror table {
+    width: 100%;
+    margin: 1em 0;
+    border-collapse: collapse;
+  }
+
+  .editor-mount .ProseMirror th,
+  .editor-mount .ProseMirror td {
+    min-width: 4em;
+    border: 1px solid var(--editor-border-color);
+    padding: 0.5em 0.65em;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .editor-mount .ProseMirror th {
+    background: var(--editor-muted-background);
+    font-weight: 650;
   }
 
   .source-editor {

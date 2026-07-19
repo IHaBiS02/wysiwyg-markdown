@@ -156,6 +156,9 @@ export class WysiwygMarkdownElement extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues<this>): void {
+    if (!this.hasUpdated && changed.has('value')) {
+      this.value = serializeMarkdown(this.#parseOrReport(this.value));
+    }
     if (changed.has('mode') && this.mode === 'source') {
       this.documentSourceValue = this.value;
     }
@@ -191,6 +194,8 @@ export class WysiwygMarkdownElement extends LitElement {
       },
       nodeViews: {
         image: (node) => this.#createImageNodeView(node),
+        list_item: (node, view, getPos) =>
+          this.#createListItemNodeView(node, view, getPos),
       },
     });
     this.#syncFormValue();
@@ -223,6 +228,14 @@ export class WysiwygMarkdownElement extends LitElement {
 
     if (changed.has('readonly') || changed.has('disabled')) {
       this.#view.setProps({ editable: () => this.#isEditable() });
+    }
+
+    if (
+      changed.has('mode') ||
+      changed.has('readonly') ||
+      changed.has('disabled')
+    ) {
+      this.#refreshTaskCheckboxes();
     }
 
     if (changed.has('value') || changed.has('disabled')) {
@@ -358,6 +371,7 @@ export class WysiwygMarkdownElement extends LitElement {
     this.blockSourceValue = '';
     this.#blockSourceRange = undefined;
     this.#view?.setProps({ editable: () => this.#isEditable() });
+    this.#refreshTaskCheckboxes();
     this.#view?.focus();
   };
 
@@ -375,6 +389,7 @@ export class WysiwygMarkdownElement extends LitElement {
     this.blockSourceValue = '';
     this.#blockSourceRange = undefined;
     this.#view.setProps({ editable: () => this.#isEditable() });
+    this.#refreshTaskCheckboxes();
     this.#emitChange('source-edit');
     this.#view.focus();
   };
@@ -599,6 +614,78 @@ export class WysiwygMarkdownElement extends LitElement {
     if (source?.startsWith('blob:') && typeof URL.revokeObjectURL === 'function') {
       URL.revokeObjectURL(source);
     }
+  }
+
+  #createListItemNodeView(
+    initialNode: ProseMirrorNode,
+    view: EditorView,
+    getPos: () => number | undefined,
+  ): NodeView {
+    const item = document.createElement('li');
+    let node = initialNode;
+
+    if (node.attrs.checked === null) {
+      return { dom: item, contentDOM: item };
+    }
+
+    item.dataset.task = 'true';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.contentEditable = 'false';
+    checkbox.setAttribute('aria-label', 'Toggle task');
+    checkbox.checked = Boolean(node.attrs.checked);
+    checkbox.disabled = !this.#isEditable();
+
+    const content = document.createElement('div');
+    content.className = 'task-content';
+    item.append(checkbox, content);
+    item.dataset.checked = checkbox.checked ? 'true' : 'false';
+
+    const handleChange = (): void => {
+      if (!this.#isEditable()) {
+        checkbox.checked = Boolean(node.attrs.checked);
+        return;
+      }
+      const position = getPos();
+      if (typeof position !== 'number') return;
+      view.dispatch(
+        view.state.tr
+          .setNodeMarkup(position, undefined, {
+            ...node.attrs,
+            checked: checkbox.checked,
+          })
+          .setMeta('wysiwygMarkdownSource', 'command'),
+      );
+    };
+    checkbox.addEventListener('change', handleChange);
+
+    return {
+      dom: item,
+      contentDOM: content,
+      update: (updatedNode) => {
+        if (
+          updatedNode.type !== node.type ||
+          updatedNode.attrs.checked === null
+        ) {
+          return false;
+        }
+        node = updatedNode;
+        checkbox.checked = Boolean(updatedNode.attrs.checked);
+        checkbox.disabled = !this.#isEditable();
+        item.dataset.checked = checkbox.checked ? 'true' : 'false';
+        return true;
+      },
+      stopEvent: (event) => event.target === checkbox,
+      destroy: () => checkbox.removeEventListener('change', handleChange),
+    };
+  }
+
+  #refreshTaskCheckboxes(): void {
+    this.renderRoot
+      .querySelectorAll<HTMLInputElement>('li[data-task] > input[type="checkbox"]')
+      .forEach((checkbox) => {
+        checkbox.disabled = !this.#isEditable();
+      });
   }
 
   #handleEditorDoubleClick = (event: MouseEvent): void => {

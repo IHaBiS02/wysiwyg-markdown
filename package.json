@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "lit": "^3.3.0",
+    "markdown-it": "^14.3.0",
     "prosemirror-commands": "^1.7.0",
     "prosemirror-history": "^1.4.0",
     "prosemirror-inputrules": "^1.5.0",
