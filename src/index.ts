@@ -2,6 +2,8 @@ import { WysiwygMarkdownElement } from './element/wysiwyg-markdown';
 
 export { WysiwygMarkdownElement } from './element/wysiwyg-markdown';
 export type {
+  CodeHighlighter,
+  CodeHighlightToken,
   EditorMode,
   ImageResolver,
   ImageUploadHandler,

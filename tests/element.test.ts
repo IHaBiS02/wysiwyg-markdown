@@ -123,6 +123,24 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('const value = 1;');
   });
 
+  it('renders host-provided syntax tokens as editable decorations', async () => {
+    const editor = await createEditor('```js\nconst value = 1;\n```');
+    const highlighter = vi.fn(() => [
+      { from: 0, to: 5, className: 'hljs-keyword' },
+      { from: 14, to: 15, className: 'hljs-number' },
+    ]);
+
+    editor.codeHighlighter = highlighter;
+    await editor.updateComplete;
+
+    expect(highlighter).toHaveBeenCalledWith('const value = 1;', 'js');
+    expect(editor.renderRoot.querySelector('.hljs-keyword')?.textContent).toBe('const');
+    expect(editor.renderRoot.querySelector('.hljs-number')?.textContent).toBe('1');
+    expect(editor.renderRoot.querySelector('pre code')?.getAttribute('contenteditable')).not.toBe(
+      'false',
+    );
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();

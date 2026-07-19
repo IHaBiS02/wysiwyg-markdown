@@ -3,8 +3,13 @@ import { baseKeymap } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, type Plugin, type Transaction } from 'prosemirror-state';
-import { EditorView, type NodeView } from 'prosemirror-view';
+import { EditorState, Plugin, type Transaction } from 'prosemirror-state';
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  type NodeView,
+} from 'prosemirror-view';
 import { standardCommands, type EditorCommand } from '../core/commands';
 import {
   markdownSchema,
@@ -32,6 +37,15 @@ export interface WysiwygMarkdownInputDetail {
 export type ImageUploadHandler = (file: File) => Promise<string | null>;
 export type ImageResolver = (source: string) => Promise<string | null> | string | null;
 export type PastedTextTransformer = (text: string) => string;
+export interface CodeHighlightToken {
+  from: number;
+  to: number;
+  className: string;
+}
+export type CodeHighlighter = (
+  code: string,
+  language: string,
+) => readonly CodeHighlightToken[];
 
 export class WysiwygMarkdownElement extends LitElement {
   static formAssociated = true;
@@ -49,6 +63,7 @@ export class WysiwygMarkdownElement extends LitElement {
       attribute: 'show-code-block-header',
       reflect: true,
     },
+    codeHighlighter: { attribute: false },
     themeCss: { attribute: false },
     blockSourceOpen: { state: true },
     blockSourceValue: { state: true },
@@ -64,6 +79,7 @@ export class WysiwygMarkdownElement extends LitElement {
   name = '';
   sourceEditScope: SourceEditScope = 'document';
   showCodeBlockHeader = true;
+  codeHighlighter?: CodeHighlighter;
   themeCss = '';
   uploadImage?: ImageUploadHandler;
   imageResolver?: ImageResolver;
@@ -80,6 +96,11 @@ export class WysiwygMarkdownElement extends LitElement {
   #plugins: Plugin[] = [];
   readonly #historyPlugin = history();
   readonly #standardInputRulesPlugin = createStandardInputRules();
+  readonly #codeHighlightPlugin = new Plugin({
+    props: {
+      decorations: (state) => this.#createCodeHighlightDecorations(state.doc),
+    },
+  });
   readonly #historyKeymapPlugin = keymap({
     'Mod-z': undo,
     'Shift-Mod-z': redo,
@@ -255,6 +276,10 @@ export class WysiwygMarkdownElement extends LitElement {
 
     if (changed.has('showCodeBlockHeader')) {
       this.#refreshCodeBlockHeaders();
+    }
+
+    if (changed.has('codeHighlighter')) {
+      this.#view.dispatch(this.#view.state.tr);
     }
 
     if (changed.has('value') || changed.has('disabled')) {
@@ -434,6 +459,7 @@ export class WysiwygMarkdownElement extends LitElement {
     return [
       this.#historyPlugin,
       this.#standardInputRulesPlugin,
+      this.#codeHighlightPlugin,
       ...this.#registry.plugins(),
       this.#historyKeymapPlugin,
       this.#baseKeymapPlugin,
@@ -662,6 +688,7 @@ export class WysiwygMarkdownElement extends LitElement {
     pre.className = 'code-block-body';
     pre.setAttribute('part', 'code-block-body');
     const code = document.createElement('code');
+    code.className = 'hljs';
     pre.append(code);
     header.append(language, copyButton);
     container.append(header, pre);
@@ -671,7 +698,9 @@ export class WysiwygMarkdownElement extends LitElement {
 
     const updatePresentation = (): void => {
       const info = String(node.attrs.params ?? '').trim();
-      language.textContent = info.split(/\s+/)[0] || 'text';
+      const codeLanguage = info.split(/\s+/)[0] || 'text';
+      language.textContent = codeLanguage;
+      code.dataset.language = codeLanguage;
       header.hidden = !this.showCodeBlockHeader;
     };
 
@@ -740,6 +769,36 @@ export class WysiwygMarkdownElement extends LitElement {
       .forEach((header) => {
         header.hidden = !this.showCodeBlockHeader;
       });
+  }
+
+  #createCodeHighlightDecorations(documentNode: ProseMirrorNode): DecorationSet {
+    if (!this.codeHighlighter) return DecorationSet.empty;
+    const decorations: Decoration[] = [];
+
+    documentNode.descendants((node, position) => {
+      if (node.type !== markdownSchema.nodes.code_block) return true;
+      const language = String(node.attrs.params ?? '').trim().split(/\s+/)[0] || 'text';
+      let tokens: readonly CodeHighlightToken[];
+      try {
+        tokens = this.codeHighlighter?.(node.textContent, language) ?? [];
+      } catch {
+        return false;
+      }
+
+      for (const token of tokens) {
+        const from = Math.max(0, Math.min(token.from, node.textContent.length));
+        const to = Math.max(from, Math.min(token.to, node.textContent.length));
+        if (from === to || !token.className.trim()) continue;
+        decorations.push(
+          Decoration.inline(position + 1 + from, position + 1 + to, {
+            class: token.className,
+          }),
+        );
+      }
+      return false;
+    });
+
+    return DecorationSet.create(documentNode, decorations);
   }
 
   #revokeResolvedImage(source: string | null): void {

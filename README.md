@@ -74,3 +74,7 @@ editor.themeCss = `
 ```js
 editor.showCodeBlockHeader = false;
 ```
+
+편집 가능한 syntax highlighting은 호스트가 문자 범위와 CSS 클래스를 반환하는
+`codeHighlighter` 콜백으로 연결합니다. DOM을 다시 작성하지 않고 ProseMirror
+decoration을 사용하므로 강조된 코드도 그대로 편집할 수 있습니다.
