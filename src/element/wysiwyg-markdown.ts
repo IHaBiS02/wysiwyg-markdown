@@ -130,6 +130,7 @@ export class WysiwygMarkdownElement extends LitElement {
           .value=${this.documentSourceValue}
           @input=${this.#handleDocumentSourceInput}
           @keydown=${this.#handleDocumentSourceKeyDown}
+          @paste=${this.#handleDocumentSourcePaste}
         ></textarea>
         ${this.blockSourceOpen
           ? html`
@@ -750,6 +751,56 @@ export class WysiwygMarkdownElement extends LitElement {
       this.setMode(this.#sourceReturnMode);
     }
   };
+
+  #handleDocumentSourcePaste = (event: ClipboardEvent): void => {
+    if (this.disabled || this.readonly) return;
+    const textarea = event.currentTarget as HTMLTextAreaElement;
+    const image = [...(event.clipboardData?.files ?? [])].find((file) =>
+      file.type.startsWith('image/'),
+    );
+
+    if (image && this.uploadImage) {
+      event.preventDefault();
+      const selectionStart = textarea.selectionStart;
+      const selectionEnd = textarea.selectionEnd;
+      void this.uploadImage(image)
+        .then((source) => {
+          if (!source) return;
+          const alt = (image.name || 'Image').replaceAll(']', '\\]');
+          this.#replaceDocumentSourceSelection(
+            textarea,
+            `![${alt}](${source})`,
+            selectionStart,
+            selectionEnd,
+          );
+        })
+        .catch((error) => this.#reportError(error, `[image paste: ${image.name}]`));
+      return;
+    }
+
+    if (!this.transformPastedText) return;
+    const text = event.clipboardData?.getData('text/plain');
+    if (text === undefined) return;
+    const transformed = this.transformPastedText(text);
+    if (transformed === text) return;
+    event.preventDefault();
+    this.#replaceDocumentSourceSelection(textarea, transformed);
+  };
+
+  #replaceDocumentSourceSelection(
+    textarea: HTMLTextAreaElement,
+    text: string,
+    start = textarea.selectionStart,
+    end = textarea.selectionEnd,
+  ): void {
+    textarea.value =
+      textarea.value.slice(0, start) + text + textarea.value.slice(end);
+    const cursor = start + text.length;
+    textarea.setSelectionRange(cursor, cursor);
+    this.documentSourceValue = textarea.value;
+    this.value = textarea.value;
+    this.#emitInput('source-edit');
+  }
 
   #handleBlockSourceInput = (event: InputEvent): void => {
     this.blockSourceValue = (event.currentTarget as HTMLTextAreaElement).value;
