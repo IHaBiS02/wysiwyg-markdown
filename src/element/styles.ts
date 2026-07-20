@@ -123,6 +123,11 @@ export const editorStyles = css`
   }
 
   .code-line-numbers {
+    font-family: var(--editor-code-font-family);
+    line-height: var(--editor-line-height);
+    vertical-align: top;
+    white-space: pre;
+    word-break: keep-all;
     user-select: none;
   }
 

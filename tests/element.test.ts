@@ -153,6 +153,32 @@ describe('wysiwyg-markdown element', () => {
     expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('first\nsecond');
   });
 
+  it('hides the line number gutter for a single-line code block', async () => {
+    const editor = await createEditor('```text\nsingle line\n```');
+    editor.showCodeLineNumbers = true;
+    await editor.updateComplete;
+
+    const gutter = editor.renderRoot.querySelector<HTMLElement>('.code-line-numbers');
+    const content = editor.renderRoot.querySelector<HTMLElement>('.code-block-content');
+    expect(gutter?.hidden).toBe(true);
+    expect(content?.hasAttribute('data-line-numbers')).toBe(false);
+  });
+
+  it('inserts a soft line break with Shift+Enter in WYSIWYG mode', async () => {
+    const editor = await createEditor('first line');
+    const proseMirror = editor.renderRoot.querySelector<HTMLElement>('.ProseMirror');
+
+    proseMirror?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }),
+    );
+    await editor.updateComplete;
+
+    expect(editor.renderRoot.querySelectorAll('.ProseMirror > p')).toHaveLength(1);
+    expect(editor.renderRoot.querySelector('br[data-soft-break]')).not.toBeNull();
+    expect(editor.value).toContain('\n');
+    expect(editor.value).not.toContain('\n\n');
+  });
+
   it('dispatches input events for commands', async () => {
     const editor = await createEditor('paragraph');
     const listener = vi.fn();

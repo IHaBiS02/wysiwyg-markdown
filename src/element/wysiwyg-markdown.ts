@@ -1,5 +1,5 @@
 import { LitElement, html, nothing, type PropertyValues } from 'lit';
-import { baseKeymap } from 'prosemirror-commands';
+import { baseKeymap, chainCommands, newlineInCode } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
@@ -111,6 +111,17 @@ export class WysiwygMarkdownElement extends LitElement {
     'Mod-z': undo,
     'Shift-Mod-z': redo,
     'Mod-y': redo,
+  });
+  readonly #lineBreakKeymapPlugin = keymap({
+    'Shift-Enter': chainCommands(newlineInCode, (state, dispatch) => {
+      const softBreak = state.schema.nodes.soft_break;
+      const { $from, $to } = state.selection;
+      if (!softBreak || !$from.sameParent($to) || !$from.parent.inlineContent) return false;
+      if (dispatch) {
+        dispatch(state.tr.replaceSelectionWith(softBreak.create()).scrollIntoView());
+      }
+      return true;
+    }),
   });
   readonly #baseKeymapPlugin = keymap(baseKeymap);
   #internals?: ElementInternals;
@@ -467,6 +478,7 @@ export class WysiwygMarkdownElement extends LitElement {
       this.#standardInputRulesPlugin,
       this.#codeHighlightPlugin,
       ...this.#registry.plugins(),
+      this.#lineBreakKeymapPlugin,
       this.#historyKeymapPlugin,
       this.#baseKeymapPlugin,
     ];
@@ -716,15 +728,18 @@ export class WysiwygMarkdownElement extends LitElement {
       language.textContent = codeLanguage;
       code.dataset.language = codeLanguage;
       header.hidden = !this.showCodeBlockHeader;
+      const lines = node.textContent.split('\n');
+      const showLineNumbers = this.showCodeLineNumbers && lines.length > 1;
       lineNumbers.replaceChildren(
-        ...node.textContent.split('\n').map((_line, index) => {
+        ...lines.map((_line, index) => {
           const number = document.createElement('span');
           number.textContent = String(index + 1);
           return number;
         }),
       );
-      lineNumbers.hidden = !this.showCodeLineNumbers;
-      body.toggleAttribute('data-line-numbers', this.showCodeLineNumbers);
+      lineNumbers.hidden = !showLineNumbers;
+      body.dataset.lineCount = String(lines.length);
+      body.toggleAttribute('data-line-numbers', showLineNumbers);
     };
 
     const showFeedback = (text: string): void => {
@@ -794,9 +809,11 @@ export class WysiwygMarkdownElement extends LitElement {
         const header = container.querySelector<HTMLElement>('.code-block-header');
         const body = container.querySelector<HTMLElement>('.code-block-content');
         const lineNumbers = container.querySelector<HTMLElement>('.code-line-numbers');
+        const showLineNumbers =
+          this.showCodeLineNumbers && Number(body?.dataset.lineCount ?? 0) > 1;
         if (header) header.hidden = !this.showCodeBlockHeader;
-        if (lineNumbers) lineNumbers.hidden = !this.showCodeLineNumbers;
-        body?.toggleAttribute('data-line-numbers', this.showCodeLineNumbers);
+        if (lineNumbers) lineNumbers.hidden = !showLineNumbers;
+        body?.toggleAttribute('data-line-numbers', showLineNumbers);
       },
     );
   }
