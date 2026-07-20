@@ -710,11 +710,13 @@ export class WysiwygMarkdownElement extends LitElement {
     pre.append(code);
     const body = document.createElement('div');
     body.className = 'code-block-content';
-    const lineNumbers = document.createElement('div');
+    const lineNumbers = document.createElement('pre');
     lineNumbers.className = 'code-line-numbers';
     lineNumbers.setAttribute('part', 'code-line-numbers');
     lineNumbers.setAttribute('aria-hidden', 'true');
     lineNumbers.contentEditable = 'false';
+    const lineNumberCode = document.createElement('code');
+    lineNumbers.append(lineNumberCode);
     body.append(lineNumbers, pre);
     header.append(language, copyButton);
     container.append(header, body);
@@ -730,13 +732,7 @@ export class WysiwygMarkdownElement extends LitElement {
       header.hidden = !this.showCodeBlockHeader;
       const lines = node.textContent.split('\n');
       const showLineNumbers = this.showCodeLineNumbers && lines.length > 1;
-      lineNumbers.replaceChildren(
-        ...lines.map((_line, index) => {
-          const number = document.createElement('span');
-          number.textContent = String(index + 1);
-          return number;
-        }),
-      );
+      lineNumberCode.textContent = lines.map((_line, index) => index + 1).join('\n');
       lineNumbers.hidden = !showLineNumbers;
       body.dataset.lineCount = String(lines.length);
       body.toggleAttribute('data-line-numbers', showLineNumbers);

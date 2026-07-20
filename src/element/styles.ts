@@ -135,10 +135,6 @@ export const editorStyles = css`
     display: none;
   }
 
-  .code-line-numbers span {
-    display: block;
-  }
-
   .code-block-header {
     display: flex;
     align-items: center;

@@ -120,7 +120,9 @@ describe('wysiwyg-markdown element', () => {
     await editor.updateComplete;
 
     expect(editor.renderRoot.querySelector<HTMLElement>('.code-block-header')?.hidden).toBe(true);
-    expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('const value = 1;');
+    expect(editor.renderRoot.querySelector('.code-block-body > code')?.textContent).toBe(
+      'const value = 1;',
+    );
   });
 
   it('renders host-provided syntax tokens as editable decorations', async () => {
@@ -136,9 +138,11 @@ describe('wysiwyg-markdown element', () => {
     expect(highlighter).toHaveBeenCalledWith('const value = 1;', 'js');
     expect(editor.renderRoot.querySelector('.hljs-keyword')?.textContent).toBe('const');
     expect(editor.renderRoot.querySelector('.hljs-number')?.textContent).toBe('1');
-    expect(editor.renderRoot.querySelector('pre code')?.getAttribute('contenteditable')).not.toBe(
-      'false',
-    );
+    expect(
+      editor.renderRoot
+        .querySelector('.code-block-body > code')
+        ?.getAttribute('contenteditable'),
+    ).not.toBe('false');
   });
 
   it('shows a non-editable line number gutter when enabled', async () => {
@@ -148,9 +152,13 @@ describe('wysiwyg-markdown element', () => {
 
     const gutter = editor.renderRoot.querySelector<HTMLElement>('.code-line-numbers');
     expect(gutter?.hidden).toBe(false);
-    expect(gutter?.textContent).toBe('12');
+    expect(gutter?.textContent).toBe('1\n2');
+    expect(gutter?.tagName).toBe('PRE');
+    expect(gutter?.querySelector('code')?.textContent).toBe('1\n2');
     expect(gutter?.contentEditable).toBe('false');
-    expect(editor.renderRoot.querySelector('pre code')?.textContent).toBe('first\nsecond');
+    expect(editor.renderRoot.querySelector('.code-block-body > code')?.textContent).toBe(
+      'first\nsecond',
+    );
   });
 
   it('hides the line number gutter for a single-line code block', async () => {
